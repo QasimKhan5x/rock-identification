@@ -1,8 +1,7 @@
-import numpy as np
 import cv2
 import imutils
+import numpy as np
 from imutils import contours
-from google.colab.patches import cv2_imshow
 
 
 def group_width(group):
@@ -16,12 +15,12 @@ def keep_spaced_elements(unsorted_list, threshold):
         the difference abs(i - j) >= threshold
     The indices of the elements to keep in the unsorted list are returned
     '''
-    n = len(unsorted_list)
-    if n == 0:
+    length = len(unsorted_list)
+    if length == 0:
         return []
-    sorted_list = sorted(range(n), key=lambda i: unsorted_list[i])
+    sorted_list = sorted(range(length), key=lambda i: unsorted_list[i])
     indices = [sorted_list[0]]
-    for i in range(1, n):
+    for i in range(1, length):
         diff = unsorted_list[sorted_list[i]] - unsorted_list[indices[-1]]
         if abs(diff) >= threshold:
             indices.append(sorted_list[i])
@@ -47,17 +46,21 @@ def keep_varying_lines(flat_lines, line_sim_thresh):
 
 def group_points_by_y(points, y_range=5):
     """
-    Groups a list of 2D points based on their y-coordinates. Points whose y-coordinates are within a range of y_range are
+    Groups a list of 2D points based on their y-coordinates. 
+    Points whose y-coordinates are within a range of y_range are
     considered part of the same group.
 
     Args:
-        points (list of list of int or float): A list of 2D points, where each point is represented as a list
+        points (list of list of int or float): A list of 2D points, 
+            where each point is represented as a list
             of two coordinates, [x, y].
         y_range (int): An int used to control the range of y coordinates in a group
 
     Returns:
-        list of list of int or float: A list of point groups, where each group is represented as a list of
-            points. Points within a group have y-coordinates that are within a range of y_range.
+        list of list of int or float: A list of point groups, where each group is 
+            represented as a list of
+            points. Points within a group have y-coordinates that are 
+            within a range of `y_range`.
 
     Raises:
         TypeError: If the input points are not a list of list of int or float.
@@ -74,18 +77,18 @@ def group_points_by_y(points, y_range=5):
     
     groups = []
     group = []
-    for i in range(len(points)):
+    for i, point in enumerate(points):
         if len(group) == 0:
-            group.append(points[i].tolist())
+            group.append(point.tolist())
         else:
             # check if the y-coordinate of the current point is within a range of y_range
-            x1, y1 = group[0]
-            x2, y2 = points[i]
+            _, y1 = group[0]
+            y2 = point[1]
             if abs(y2 - y1) <= y_range:
                 group.append(points[i].tolist())
             else:
                 groups.append(group)
-                group = [points[i].tolist()]
+                group = [point.tolist()]
     
     # don't create groups with 1 point only (the last point)
     if len(group) > 1:
@@ -94,16 +97,27 @@ def group_points_by_y(points, y_range=5):
     return groups
 
 def lies_inside_contour(cont, x1, x2, y):
+    '''
+    Given two x coordinates and a y coordinate, 
+    check if the horizontal line segment
+    lies inside the contour `cont`
+    '''
     for x in range(x1 + 1, x2):
         p = np.array([x, y], dtype='uint8')
+        # return False if point does not lie inside contour
         if cv2.pointPolygonTest(cont, p, False) == -1:
             return False
     return True
 
 def get_width_and_residuals(group, cont):
     '''
-    group is sorted by x-coordinate
-    this function should be called again on g2 until len(g2) <= 1
+    Given a group of points that lie close to each other vertically,
+    where `group` is sorted by x-coordinate
+    and `cont` is the contour of the object,
+    partition the group into two groups, 
+    one that lies inside the contour and the other that may lie outside the contour
+    to prevent making horizontal lines that cover a portion of the object that lies
+    outside the contour
     '''
     # Get the mean y-coordinate
     y_mean = np.mean(group[:, 1]).astype('uint8')
@@ -128,16 +142,24 @@ def get_width_and_residuals(group, cont):
     return (x1, x_max, (y1 + y2) // 2), remaining_group
 
 
-def find_flat_lines(contour, img, w_min=0, w_max=float('inf'), line_sim_thresh=5, ratio=1, group_y_range=2):
+def find_flat_lines(contour, img, w_min=0, w_max=float('inf'), 
+                    line_sim_thresh=5, ratio=1, group_y_range=2):
+    '''
+    Find all flat horizontal lines inside the contour
+    length L of line is between w_min and w_max
+    No two lines can have length difference <= line_sim_thresh
+    No two lines can have y-coordinate difference <= group_y_range
+    Actual length of the line is ratio * L
+    '''
     # group points by their y-coordinates
     groups = group_points_by_y(contour, y_range=group_y_range)
     # initialize the list of flat lines
     flat_lines = []
     
     # iterate over each group of points
-    for i in range(len(groups)):
+    for i, group in enumerate(groups):
         # convert to numpy array
-        group = np.array(groups[i])
+        group = np.array(group)
         # sort group by x-coordinate
         group = group[np.argsort(group[:, 0])]
         remaining_group = group.copy()
@@ -156,28 +178,29 @@ def find_flat_lines(contour, img, w_min=0, w_max=float('inf'), line_sim_thresh=5
     num_flat_lines = len(flat_lines)
     
     # add arrows to show the flat lines
-    texts = []
     for i in range(num_flat_lines):
         line = np.array(flat_lines[i])
         x_min = np.min(line[:, 0]).astype('uint8')
         x_max = np.max(line[:, 0]).astype('uint8')
-        y = np.mean(line[:, 1]).astype('uint8')
+        y_mean = np.mean(line[:, 1]).astype('uint8')
         width = (x_max - x_min) / ratio
         width = round(width, 1)
         text = str(width)
-        yloc = int(y) + 10
+        yloc = int(y_mean) + 10
         if yloc >= 240:
-            yloc = int(y) - 5
-        cv2.arrowedLine(img, (x_min, y), (x_max, y), (0, 255, 0), 2)
+            yloc = int(y_mean) - 5
+        cv2.arrowedLine(img, (x_min, y_mean), (x_max, y_mean), (0, 255, 0), 2)
         if x_min >= 230:
             x_min -= 5
-        cv2.putText(img, text, (x_min, yloc), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
+        cv2.putText(img, text, (x_min, yloc), 
+                    cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1)
     
     return flat_lines, num_flat_lines, img
     
     
 def draw_widths(img, mask, ratio=1, morph1=False, morph2=False,
-                w_min=0, w_max=float('inf'), line_sim_thresh=0, group_y_range=1):
+                w_min=0, w_max=float('inf'), line_sim_thresh=0, group_y_range=1,
+                draw=False):
     # threshold the mudstone
     thresh = np.where(mask == 2, 255, 0).astype(np.uint8)
     
@@ -193,7 +216,7 @@ def draw_widths(img, mask, ratio=1, morph1=False, morph2=False,
         if morph2:
             # remove extraneous connections
             morph = cv2.morphologyEx(morph, cv2.MORPH_OPEN, small_element, iterations=1)
-    '''contour analysis'''
+    # '''contour analysis'''
     # find the largest contour
     cnts = cv2.findContours(morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
@@ -222,7 +245,9 @@ def draw_widths(img, mask, ratio=1, morph1=False, morph2=False,
                                                            line_sim_thresh=line_sim_thresh,
                                                            ratio=ratio,
                                                            group_y_range=group_y_range)
-        cv2_imshow(orig)
+        if draw:
+            cv2.imshow("contour", orig)
+            cv2.waitKey(0)
+            print()
         anno_imgs.append(orig)
-        print()
     return anno_imgs
