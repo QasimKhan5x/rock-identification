@@ -82,12 +82,12 @@ def get_pixel_length_ratio(gray_img, mask, num_closing_iterations=2, actual_widt
     h_element = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 1))
     cnts = get_contours(th, num_closing_iterations, element=h_element)
     i = 0
-    while len(cnts) > 6:
+    while len(cnts) > 10:
         i += 1
         cnts = get_contours(th, num_closing_iterations + i, element=h_element)
         # function failed
         if i > 5:
-            return -1
+            return -1, None
     # sort the contours from left-to-right
     (cnts, _) = contours.sort_contours(cnts)
     for c in cnts:
@@ -114,5 +114,5 @@ def get_pixel_length_ratio(gray_img, mask, num_closing_iterations=2, actual_widt
             else:
                 cv2.imshow("contour", orig)
                 cv2.waitKey(0)
-        return ratio
-    return -2
+        return ratio, None
+    return -2, None

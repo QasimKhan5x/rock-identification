@@ -2,9 +2,8 @@ import tkinter as tk
 from tkinter import filedialog
 
 import cv2
-import matplotlib.pyplot as plt
 import numpy as np
-from PIL import Image, ImageChops, ImageTk
+from PIL import Image, ImageTk
 
 from get_scale_ratio import get_pixel_length_ratio
 
@@ -107,11 +106,13 @@ class ImageUploaderGUI:
         ratio, result = get_pixel_length_ratio(
             self.image_gray_cv2,
             self.mask_cv2,
-            num_closing_iterations=num_iterations,
+            num_closing_iterations=num_iterations, # type: ignore
             actual_width=actual_width,
             draw=True,
             return_drawn_img=True,
         )
+        if ratio < 0:
+            ratio = "failed"
         self.ratio = ratio
 
         # display ratio of pixels to length and result image
