@@ -1,6 +1,7 @@
 output/
 images/
 masks/
+main.py
 
 
 .vscode
