@@ -5,30 +5,55 @@ from imutils import contours, perspective
 
 
 def get_scale(img, mask):
-    '''
+    """
     Given a grayscale image and a mask, returns the scale object in the image.
-    '''
+    """
     # get the foreground (0 corresponds to scale)
     _, scale_candidates = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY_INV)
     # find the largest contour
-    cnts = cv2.findContours(scale_candidates, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+    cnts = cv2.findContours(
+        scale_candidates, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+    cnts = imutils.grab_contours(cnts)
+    # sort the contours from left-to-right
+    (cnts, _) = contours.sort_contours(cnts)
+    # get the largest contour using its area
+    cont_max = max(cnts, key=cv2.contourArea)
+    # Create an output mask of zeros with the same size as the original mask
+    output_mask = np.zeros_like(mask)
+    # Create a boolean mask of the largest contour
+    output_mask = np.zeros_like(mask)
+    cv2.drawContours(output_mask, [cont_max], 0, 255, -1)
+
+    # Define the kernel for morphological operations
+    kernel_size = (11, 11)
+    kernel = cv2.getStructuringElement(cv2.MORPH_RECT, kernel_size)
+
+    # Perform morphological opening to remove thin connections
+    opened = cv2.morphologyEx(output_mask, cv2.MORPH_OPEN, kernel)
+
+    # get largest contour again
+    cnts = cv2.findContours(opened, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
     # sort the contours from left-to-righ
     (cnts, _) = contours.sort_contours(cnts)
     # get the largest contour using its area
-    cont_max = max(cnts, key = cv2.contourArea)
+    cont_max = max(cnts, key=cv2.contourArea)
     # find the bounding box of the contour
     x, y, w, h = cv2.boundingRect(cont_max)
-    scale = img[y:y+h, x:x+w].copy()
+    scale = img[y : y + h, x : x + w].copy()
     return scale
 
+
 def get_contours(th, num_closing_iterations, element):
-    '''
-    horizontal closing and erosion followed by canny edge detection 
+    """
+    horizontal closing and erosion followed by canny edge detection
     followed by contour finding
-    '''
+    """
     # close the gaps between each black box
-    morph = cv2.morphologyEx(th, cv2.MORPH_CLOSE, element, iterations=num_closing_iterations)
+    morph = cv2.morphologyEx(
+        th, cv2.MORPH_CLOSE, element, iterations=num_closing_iterations
+    )
     # erode horizontally to get original width of strip
     morph = cv2.erode(morph, element)
     # get edges
@@ -38,7 +63,15 @@ def get_contours(th, num_closing_iterations, element):
     cnts = imutils.grab_contours(cnts)
     return cnts
 
-def get_pixel_length_ratio(gray_img, mask, num_closing_iterations=2, actual_width=15, draw=False, return_drawn_img=False):
+
+def get_pixel_length_ratio(
+    gray_img,
+    mask,
+    num_closing_iterations=2,
+    actual_width=15,
+    draw=False,
+    return_drawn_img=False,
+):
     """
     Calculates the pixel length ratio of a rectangular, yellowish scale object in a grayscale image.
 
@@ -72,12 +105,14 @@ def get_pixel_length_ratio(gray_img, mask, num_closing_iterations=2, actual_widt
     # extract the scale from the mask
     # crop the mask to get roi for scale
     scale = get_scale(gray_img, mask)
+    # crop edges
+    scale = scale[5:-5, 5:-5]
     # extract the boxes from the roi
     # blur to remove noise
     # blur = cv2.GaussianBlur(scale,(5,5),0)
     # blurring degrades thresholding so it is removed
     # threshold to get the black bloxes
-    _, th = cv2.threshold(scale, 0, 255, cv2.THRESH_BINARY_INV+cv2.THRESH_OTSU)
+    _, th = cv2.threshold(scale, 0, 255, cv2.THRESH_BINARY_INV + cv2.THRESH_OTSU)
     # horizontal structuring element
     h_element = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 1))
     cnts = get_contours(th, num_closing_iterations, element=h_element)
@@ -93,13 +128,12 @@ def get_pixel_length_ratio(gray_img, mask, num_closing_iterations=2, actual_widt
     for c in cnts:
         w, h = cv2.boundingRect(c)[-2:]
         width_perc = round(w / scale.shape[1] * 100)
-        area = cv2.contourArea(c)
+        area = w * h
         area_perc = area / (scale.shape[0] * scale.shape[1]) * 100
         area_perc = round(area_perc, 2)
         aspect_ratio = round(float(w) / h, 2)
-        # rect_area = w*h
-        # extent = round(float(area) / rect_area, 2)
-        if width_perc < 65 or width_perc >= 99 or area_perc == 0 or aspect_ratio < 6:
+
+        if width_perc < 65 or width_perc >= 99 or area_perc == 0 or aspect_ratio < 5:
             continue
         ratio = round(w / actual_width, 1)
         if draw:
@@ -107,7 +141,7 @@ def get_pixel_length_ratio(gray_img, mask, num_closing_iterations=2, actual_widt
             box = cv2.minAreaRect(c)
             box = cv2.boxPoints(box)
             box = np.array(box, dtype="int")
-            box = perspective.order_points(box).astype('int')
+            box = perspective.order_points(box).astype("int")
             cv2.drawContours(orig, [box], 0, (0, 255, 0), 2)
             if return_drawn_img:
                 return ratio, orig

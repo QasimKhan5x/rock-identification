@@ -12,59 +12,70 @@ class DrawLinesGUI(tk.Frame):
         super().__init__(master)
         self.master = master
         self.pack(side="right", fill="both", expand=True)
-        
+
         self.image_uploader = image_uploader
 
-        # create morp1 and morp2 buttons
+        # Create morp1 and morp2 buttons
         self.morp1 = tk.BooleanVar()
         self.morp2 = tk.BooleanVar()
-        self.morp1_button = tk.Checkbutton(self, text="morp1", variable=self.morp1)
-        self.morp2_button = tk.Checkbutton(self, text="morp2", variable=self.morp2)
-        self.morp1_button.grid(row=0, column=0)
-        self.morp2_button.grid(row=0, column=1)
+        self.morp1_button = tk.Checkbutton(self, text="Morph 1", variable=self.morp1)
+        self.morp2_button = tk.Checkbutton(self, text="Morph 2", variable=self.morp2)
+        self.morp1_button.grid(row=0, column=0, padx=10, pady=5)
+        self.morp2_button.grid(row=0, column=1, padx=10, pady=5)
 
-        # create entry forms and labels
-        self.min_label = tk.Label(self, text="min")
-        self.min_label.grid(row=1, column=0)
+        # Create entry forms and labels
+        self.min_label = tk.Label(self, text="Min rock length:")
+        self.min_label.grid(row=1, column=0, padx=10, pady=5, sticky="e")
         self.min_entry = tk.Entry(self)
         self.min_entry.insert(0, "0")
-        self.min_entry.grid(row=2, column=0)
+        self.min_entry.grid(row=1, column=1, padx=10, pady=5)
 
-        self.max_label = tk.Label(self, text="max")
-        self.max_label.grid(row=3, column=0)
+        self.max_label = tk.Label(self, text="Max rock length:")
+        self.max_label.grid(row=2, column=0, padx=10, pady=5, sticky="e")
         self.max_entry = tk.Entry(self)
         self.max_entry.insert(0, "100")
-        self.max_entry.grid(row=4, column=0)
+        self.max_entry.grid(row=2, column=1, padx=10, pady=5)
 
-        self.diff_label = tk.Label(self, text="min difference")
-        self.diff_label.grid(row=5, column=0)
+        self.diff_label = tk.Label(
+            self, text="Minimum difference between rock lengths:"
+        )
+        self.diff_label.grid(row=3, column=0, padx=10, pady=5, sticky="e")
         self.diff_entry = tk.Entry(self)
         self.diff_entry.insert(0, "5")
-        self.diff_entry.grid(row=6, column=0)
+        self.diff_entry.grid(row=3, column=1, padx=10, pady=5)
 
-        self.vgd_label = tk.Label(self, text="vertical grouping distance")
-        self.vgd_label.grid(row=7, column=0)
+        self.vgd_label = tk.Label(
+            self, text="Horizontal distance between vertical lines:"
+        )
+        self.vgd_label.grid(row=4, column=0, padx=10, pady=5, sticky="e")
         self.vgd_entry = tk.Entry(self)
         self.vgd_entry.insert(0, "2")
-        self.vgd_entry.grid(row=8, column=0)
+        self.vgd_entry.grid(row=4, column=1, padx=10, pady=5)
 
-        # create draw lines button
-        self.draw_button = tk.Button(self, text="draw lines", command=self.draw_lines)
-        self.draw_button.grid(row=9, column=0, pady=10)
+        # Create draw lines button
+        self.draw_button = tk.Button(
+            self, text="Draw Lines", command=self.draw_lines, width=15
+        )
+        self.draw_button.grid(row=5, column=0, columnspan=2, padx=10, pady=10)
 
-        # create sample image
+        # Create sample image
         self.sample_image = tk.Label(self)
-        self.sample_image.grid(row=10, column=0, padx=5, pady=5, columnspan=2)
-        
-        # create list to store generated images
+        self.sample_image.grid(row=6, column=0, columnspan=2, padx=10, pady=5)
+
+        # Create list to store generated images
         self.images = []
-        # index of currently displayed image
+        # Index of currently displayed image
         self.curr_img_index = 0
 
-        # create back and next buttons
-        self.back_button = tk.Button(self, text="Back", command=self.show_previous_image)
-        self.next_button = tk.Button(self, text="Next", command=self.show_next_image)
-        
+        # Create back and next buttons
+        self.back_button = tk.Button(
+            self, text="Back", command=self.show_previous_image, width=10
+        )
+        self.next_button = tk.Button(
+            self, text="Next", command=self.show_next_image, width=10
+        )
+        self.back_button.grid(row=7, column=0, pady=5)
+        self.next_button.grid(row=7, column=1, pady=5)
 
     def draw_lines(self):
         self.images.clear()
@@ -73,20 +84,26 @@ class DrawLinesGUI(tk.Frame):
         image = self.image_uploader.image_cv2
         mask = self.image_uploader.mask_cv2
         ratio = self.image_uploader.ratio
-        
-        annotated_images = draw_widths(image, mask, ratio=ratio,
-                                       morph1=self.morp1.get(), morph2=self.morp2.get(), 
-                                       w_min=int(self.min_entry.get()), w_max=int(self.max_entry.get()),
-                                       line_sim_thresh=int(self.diff_entry.get()), 
-                                       group_y_range=int(self.vgd_entry.get()))
-        
+
+        annotated_images = draw_widths(
+            image,
+            mask,
+            ratio=ratio,
+            morph1=self.morp1.get(),
+            morph2=self.morp2.get(),
+            w_min=int(self.min_entry.get()),
+            w_max=int(self.max_entry.get()),
+            line_sim_thresh=int(self.diff_entry.get()),
+            group_y_range=int(self.vgd_entry.get()),
+        )
+
         for img in annotated_images:
             img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)
-            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype('uint8')
+            img = cv2.cvtColor(img, cv2.COLOR_BGR2RGB).astype("uint8")
             img = Image.fromarray(img)
             photo = ImageTk.PhotoImage(img)
             self.images.append(photo)
-        
+
         if len(self.images) > 0:
             # display first image
             self.sample_image.config(image=self.images[0])

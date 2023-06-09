@@ -1,5 +1,6 @@
 import os
 import tkinter as tk
+from tkinter import ttk
 
 from DrawLinesGUI import DrawLinesGUI
 from ImageUploaderGUI import ImageUploaderGUI
@@ -14,11 +15,21 @@ class MainWindow:
         path = os.path.join(path, "rock.ico")
         master.iconbitmap(path)
 
-        # divide window into two frames of equal width
-        left_frame = tk.Frame(master, width=400, height=400)
+        # Create styled frames
+        style = ttk.Style()
+        style.configure(
+            "LeftFrame.TFrame", background="#F0F0F0", borderwidth=2, relief="raised"
+        )
+        style.configure(
+            "RightFrame.TFrame", background="#F0F0F0", borderwidth=2, relief="raised"
+        )
+
+        left_frame = ttk.Frame(master, style="LeftFrame.TFrame", width=400, height=400)
         left_frame.grid(row=0, column=0, sticky="nsew")
 
-        right_frame = tk.Frame(master, width=400, height=400)
+        right_frame = ttk.Frame(
+            master, style="RightFrame.TFrame", width=400, height=400
+        )
         right_frame.grid(row=0, column=1, sticky="nsew")
 
         # place ImageUploaderGUI widget in left frame
