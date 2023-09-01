@@ -4,7 +4,7 @@ import cv2
 from PIL import Image, ImageTk
 
 from draw_widths import draw_widths
-from ImageUploaderGUI import ImageUploaderGUI
+from ImageUploaderGUI2 import ImageUploaderGUI
 
 
 class DrawLinesGUI(tk.Frame):
@@ -15,52 +15,40 @@ class DrawLinesGUI(tk.Frame):
 
         self.image_uploader = image_uploader
 
-        # Create morp1 and morp2 buttons
-        self.morp1 = tk.BooleanVar()
-        self.morp2 = tk.BooleanVar()
-        self.morp1_button = tk.Checkbutton(self, text="Morph 1", variable=self.morp1)
-        self.morp2_button = tk.Checkbutton(self, text="Morph 2", variable=self.morp2)
-        self.morp1_button.grid(row=0, column=0, padx=10, pady=5)
-        self.morp2_button.grid(row=0, column=1, padx=10, pady=5)
-
         # Create entry forms and labels
-        self.min_label = tk.Label(self, text="Min rock length:")
-        self.min_label.grid(row=1, column=0, padx=10, pady=5, sticky="e")
+        self.min_label = tk.Label(self, text="Min rock width:")
+        self.min_label.grid(row=0, column=0, padx=10, pady=5, sticky="e")
         self.min_entry = tk.Entry(self)
         self.min_entry.insert(0, "0")
-        self.min_entry.grid(row=1, column=1, padx=10, pady=5)
+        self.min_entry.grid(row=0, column=1, padx=10, pady=5)
 
-        self.max_label = tk.Label(self, text="Max rock length:")
-        self.max_label.grid(row=2, column=0, padx=10, pady=5, sticky="e")
+        self.max_label = tk.Label(self, text="Max rock width:")
+        self.max_label.grid(row=1, column=0, padx=10, pady=5, sticky="e")
         self.max_entry = tk.Entry(self)
         self.max_entry.insert(0, "100")
-        self.max_entry.grid(row=2, column=1, padx=10, pady=5)
+        self.max_entry.grid(row=1, column=1, padx=10, pady=5)
 
-        self.diff_label = tk.Label(
-            self, text="Minimum difference between rock lengths:"
-        )
-        self.diff_label.grid(row=3, column=0, padx=10, pady=5, sticky="e")
+        self.diff_label = tk.Label(self, text="Minimum difference between widths:")
+        self.diff_label.grid(row=2, column=0, padx=10, pady=5, sticky="e")
         self.diff_entry = tk.Entry(self)
         self.diff_entry.insert(0, "5")
-        self.diff_entry.grid(row=3, column=1, padx=10, pady=5)
+        self.diff_entry.grid(row=2, column=1, padx=10, pady=5)
 
-        self.vgd_label = tk.Label(
-            self, text="Horizontal distance between vertical lines:"
-        )
-        self.vgd_label.grid(row=4, column=0, padx=10, pady=5, sticky="e")
+        self.vgd_label = tk.Label(self, text="Distance between each layer:")
+        self.vgd_label.grid(row=3, column=0, padx=10, pady=5, sticky="e")
         self.vgd_entry = tk.Entry(self)
         self.vgd_entry.insert(0, "2")
-        self.vgd_entry.grid(row=4, column=1, padx=10, pady=5)
+        self.vgd_entry.grid(row=3, column=1, padx=10, pady=5)
 
         # Create draw lines button
         self.draw_button = tk.Button(
             self, text="Draw Lines", command=self.draw_lines, width=15
         )
-        self.draw_button.grid(row=5, column=0, columnspan=2, padx=10, pady=10)
+        self.draw_button.grid(row=4, column=0, columnspan=2, padx=10, pady=10)
 
         # Create sample image
         self.sample_image = tk.Label(self)
-        self.sample_image.grid(row=6, column=0, columnspan=2, padx=10, pady=5)
+        self.sample_image.grid(row=5, column=0, columnspan=2, padx=10, pady=5)
 
         # Create list to store generated images
         self.images = []
@@ -74,8 +62,8 @@ class DrawLinesGUI(tk.Frame):
         self.next_button = tk.Button(
             self, text="Next", command=self.show_next_image, width=10
         )
-        self.back_button.grid(row=7, column=0, pady=5)
-        self.next_button.grid(row=7, column=1, pady=5)
+        self.back_button.grid(row=6, column=0, pady=5)
+        self.next_button.grid(row=6, column=1, pady=5)
 
     def draw_lines(self):
         self.images.clear()
@@ -89,13 +77,11 @@ class DrawLinesGUI(tk.Frame):
             image,
             mask,
             ratio=ratio,
-            morph1=self.morp1.get(),
-            morph2=self.morp2.get(),
-            w_min=int(self.min_entry.get()),
-            w_max=int(self.max_entry.get()),
-            line_sim_thresh=int(self.diff_entry.get()),
-            group_y_range=int(self.vgd_entry.get()),
-        )
+            w_min=float(self.min_entry.get()),
+            w_max=float(self.max_entry.get()),
+            line_sim_thresh=float(self.diff_entry.get()),
+            group_y_range=float(self.vgd_entry.get()),
+        )[0]
 
         for img in annotated_images:
             img = cv2.rotate(img, cv2.ROTATE_90_CLOCKWISE)

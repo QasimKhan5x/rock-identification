@@ -4,6 +4,31 @@ import numpy as np
 from imutils import contours, perspective
 
 
+def get_notebook_width(mask):
+    """Get the width of the notebook in pixels"""
+    if not isinstance(mask, np.ndarray):
+        return None, None
+    background_mask = cv2.threshold(mask, 0, 255, cv2.THRESH_BINARY_INV)[1]
+    background_mask = cv2.morphologyEx(
+        background_mask, cv2.MORPH_OPEN, np.ones((3, 9), np.uint8)
+    )
+    background_mask = cv2.morphologyEx(
+        background_mask, cv2.MORPH_OPEN, np.ones((9, 3), np.uint8)
+    )
+    # get left and right edges of the notebook
+    contours, _ = cv2.findContours(
+        background_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+    )
+    if len(contours) > 0:
+        largest_contour = max(contours, key=cv2.contourArea)
+        x, y, w, h = cv2.boundingRect(largest_contour)
+        pt1 = (x, y + h // 2)
+        pt2 = (x + w, y + h // 2)
+        return pt1, pt2
+    else:
+        return None, None
+
+
 def get_scale(img, mask):
     """
     Given a grayscale image and a mask, returns the scale object in the image.

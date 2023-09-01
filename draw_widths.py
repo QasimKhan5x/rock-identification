@@ -3,70 +3,28 @@ import imutils
 import numpy as np
 from imutils import contours
 
+id2name = {0: "scale", 1: "sandstone", 2: "mudstone"}
+name2id = {"scale": 0, "sandstone": 1, "mudstone": 2}
+
 
 def group_width(group):
     """Get the width of a flat line"""
     return group[:, 0].max() - group[:, 0].min()
 
 
-def keep_spaced_elements(unsorted_list, threshold):
+def group_points_by_y(points, y_range: float = 5):
     """
-    Takes the unsorted list corresponding to the width of each flat line
-    Returns a new list such that for every element i, j in the new list,
-        the difference abs(i - j) >= threshold
-    The indices of the elements to keep in the unsorted list are returned
-
-    # warning
-    output might not contain all the lines whose width is >= line_sim_thresh
-    because max value is taken at each iteration
-    """
-    length = len(unsorted_list)
-    if length == 0:
-        return []
-    sorted_list = sorted(range(length), key=lambda i: unsorted_list[i])
-    indices = [sorted_list[0]]
-    for i in range(1, length):
-        diff = unsorted_list[sorted_list[i]] - unsorted_list[indices[-1]]
-        if abs(diff) >= threshold:
-            indices.append(sorted_list[i])
-        else:
-            if diff > 0:
-                del indices[-1]
-                indices.append(sorted_list[i])
-    return indices
-
-
-def keep_varying_lines(flat_lines, line_sim_thresh):
-    """
-    Take the flat_lines and line similarity threshold as input
-    Return all the lines whose difference is >= line_sim_thresh
-    """
-    widths = [group_width(g) for g in flat_lines]
-    indices_keep = keep_spaced_elements(widths, threshold=line_sim_thresh)
-    # print('widths', widths, 'idx', indices_keep)
-    flat_lines_filtered = [flat_lines[i] for i in indices_keep]
-    # widths = sorted([group_width(g) for g in flat_lines_filtered])
-    # print('widths_new', widths)
-    return flat_lines_filtered
-
-
-def group_points_by_y(points, y_range=5):
-    """
-    Groups a list of 2D points based on their y-coordinates.
-    Points whose y-coordinates are within a range of y_range are
+    Groups a list of 2D points based on their y-coordinates. Points whose y-coordinates are within a range of y_range are
     considered part of the same group.
 
     Args:
-        points (list of list of int or float): A list of 2D points,
-            where each point is represented as a list
+        points (list of list of int or float): A list of 2D points, where each point is represented as a list
             of two coordinates, [x, y].
         y_range (int): An int used to control the range of y coordinates in a group
 
     Returns:
-        list of list of int or float: A list of point groups, where each group is
-            represented as a list of
-            points. Points within a group have y-coordinates that are
-            within a range of `y_range`.
+        list of list of int or float: A list of point groups, where each group is represented as a list of
+            points. Points within a group have y-coordinates that are within a range of y_range.
 
     Raises:
         TypeError: If the input points are not a list of list of int or float.
@@ -74,58 +32,45 @@ def group_points_by_y(points, y_range=5):
     Example:
         >>> points = [[0, 0], [1, 2], [2, 2], [3, 3], [4, 5], [5, 5]]
         >>> group_points_by_y(points, y_range=2)
-        [[[0, 0]], [[1, 2], [2, 2], [3, 3]], [[4, 5], [5, 5]]]
-
+        [[[0, 0], [1, 2], [2, 2]], [[3, 3], [4, 5], [5, 5]]]
     """
     # sort the points by y-coordinate
     points = np.squeeze(points)
     points = points[np.argsort(points[:, 1])]
-
     groups = []
     group = []
-    for i, point in enumerate(points):
+    for i in range(len(points)):
         if len(group) == 0:
-            group.append(point.tolist())
+            group.append(points[i].tolist())
         else:
             # check if the y-coordinate of the current point is within a range of y_range
-            _, y1 = group[0]
-            y2 = point[1]
+            y1 = group[0][1]
+            y2 = points[i][1]
             if abs(y2 - y1) <= y_range:
                 group.append(points[i].tolist())
             else:
                 groups.append(group)
-                group = [point.tolist()]
-
+                group = [points[i].tolist()]
     # don't create groups with 1 point only (the last point)
     if len(group) > 1:
         groups.append(group)
-
     return groups
 
 
 def lies_inside_contour(cont, x1, x2, y):
-    """
-    Given two x coordinates and a y coordinate,
-    check if the horizontal line segment
-    lies inside the contour `cont`
-    """
+    """check if the points at y between x1 and x2 lies inside the contour"""
     for x in range(x1 + 1, x2):
         p = np.array([x, y], dtype="uint8")
-        # return False if point does not lie inside contour
-        if cv2.pointPolygonTest(cont, p, False) == -1:
+        result = cv2.pointPolygonTest(cont, p, False)
+        if result == -1:
             return False
     return True
 
 
 def get_width_and_residuals(group, cont):
     """
-    Given a group of points that lie close to each other vertically,
-    where `group` is sorted by x-coordinate
-    and `cont` is the contour of the object,
-    partition the group into two groups,
-    one that lies inside the contour and the other that may lie outside the contour
-    to prevent making horizontal lines that cover a portion of the object that lies
-    outside the contour
+    group is sorted by x-coordinate
+    this function should be called again on g2 until len(g2) <= 1
     """
     # Get the mean y-coordinate
     y_mean = np.mean(group[:, 1]).astype("uint8")
@@ -150,31 +95,102 @@ def get_width_and_residuals(group, cont):
     return (x1, x_max, (y1 + y2) // 2), remaining_group
 
 
+def keep_varying_lines_based_on_similarity(lines, y_range, threshold):
+    """
+    Remove lines with similar widths and if they are close to each other
+    """
+    if not lines:
+        return []
+    lines.sort(key=lambda line: line[0][1])  # Sort by y value
+    new_lines = [lines[0]]
+    for i in range(1, len(lines)):
+        current_line, previous_line = lines[i], new_lines[-1]
+        if abs(current_line[0][1] - previous_line[0][1]) <= 2 * y_range:
+            width_prev = group_width(previous_line)
+            width_curr = group_width(current_line)
+            if abs(width_prev - width_curr) < threshold:  # If widths are too similar
+                # If the previous line was more similar to its neighbor than the current line, remove the previous line
+                if i != len(lines) - 1:
+                    next_line = lines[i + 1]
+                    width_next = group_width(next_line)
+                    if abs(width_next - width_curr) > abs(width_next - width_prev):
+                        new_lines.pop()
+                        new_lines.append(current_line)
+                    else:
+                        continue
+                else:
+                    new_lines.pop()
+                    new_lines.append(current_line)
+            else:
+                new_lines.append(current_line)
+        else:
+            new_lines.append(current_line)
+    return new_lines
+
+
+def bresenham(x0, y0, x1, y1):
+    """Yield integer coordinates on the line from (x0, y0) to (x1, y1).
+    Input coordinates should be integers.
+    The result will contain both the start and the end point."""
+    dx = x1 - x0
+    dy = y1 - y0
+
+    xsign = 1 if dx > 0 else -1
+    ysign = 1 if dy > 0 else -1
+
+    dx = abs(dx)
+    dy = abs(dy)
+
+    if dx > dy:
+        xx, xy, yx, yy = xsign, 0, 0, ysign
+    else:
+        dx, dy = dy, dx
+        xx, xy, yx, yy = 0, ysign, xsign, 0
+
+    D = 2 * dy - dx
+    y = 0
+
+    for x in range(dx + 1):
+        yield x0 + x * xx + y * yx, y0 + x * xy + y * yy
+        if D >= 0:
+            y += 1
+            D -= 2 * dx
+        D += 2 * dy
+
+
+def trace_contour(contour):
+    """contour tracing to interpolate points along the contour edges"""
+    contour_new = []
+    for i in range(len(contour) - 1):
+        p1 = contour[i][0]
+        p2 = contour[i + 1][0]
+        interpolated = list(bresenham(p1[0], p1[1], p2[0], p2[1]))
+        contour_new.extend(interpolated)
+    contour_new.append(contour[-1][0])
+    contour = np.array(contour_new, dtype="int32")
+    contour = np.expand_dims(contour, axis=1)
+    return contour
+
+
 def find_flat_lines(
-    contour,
-    img,
-    w_min=0,
-    w_max=float("inf"),
-    line_sim_thresh=5,
-    ratio=1,
-    group_y_range=2,
+    contour: np.ndarray,
+    img: np.ndarray,
+    w_min: float = 0,
+    w_max: float = float("inf"),
+    line_sim_thresh: float = 5.0,
+    ratio: float = 1,
+    group_y_range: float = 2,
 ):
-    """
-    Find all flat horizontal lines inside the contour
-    length L of line is between w_min and w_max
-    No two lines can have length difference <= line_sim_thresh
-    No two lines can have y-coordinate difference <= group_y_range
-    Actual length of the line is ratio * L
-    """
+    # perform contour tracing
+    contour = trace_contour(contour)
     # group points by their y-coordinates
     groups = group_points_by_y(contour, y_range=group_y_range)
     # initialize the list of flat lines
     flat_lines = []
-
     # iterate over each group of points
-    for i, group in enumerate(groups):
+    for i in range(len(groups)):
         # convert to numpy array
-        group = np.array(group)
+        group = np.array(groups[i])
         # sort group by x-coordinate
         group = group[np.argsort(group[:, 0])]
         remaining_group = group.copy()
@@ -189,76 +205,67 @@ def find_flat_lines(
                 line = np.array([[x_min, y_mean], [x_max, y_mean]])
                 flat_lines.append(line)
     # remove lines with similar widths
-    flat_lines = keep_varying_lines(flat_lines, line_sim_thresh)
-
+    flat_lines = keep_varying_lines_based_on_similarity(
+        flat_lines, group_y_range, line_sim_thresh
+    )
     # the number of flat lines is the number of groups
     num_flat_lines = len(flat_lines)
-
     # add arrows to show the flat lines
+    avg_width = 0
     for i in range(num_flat_lines):
         line = np.array(flat_lines[i])
         x_min = np.min(line[:, 0]).astype("uint8")
         x_max = np.max(line[:, 0]).astype("uint8")
-        y_mean = np.mean(line[:, 1]).astype("uint8")
+        y = np.mean(line[:, 1]).astype("uint8")
         width = (x_max - x_min) / ratio
         width = round(width, 1)
+        avg_width += width
         text = str(width)
-        yloc = int(y_mean) + 10
+        yloc = int(y) + 10
         if yloc >= 240:
-            yloc = int(y_mean) - 5
-        cv2.arrowedLine(img, (x_min, y_mean), (x_max, y_mean), (0, 255, 0), 2)
+            yloc = int(y) - 5
+        cv2.arrowedLine(img, (x_min, y), (x_max, y), (0, 255, 0), 2)
         if x_min >= 230:
             x_min -= 5
         cv2.putText(
             img, text, (x_min, yloc), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 255), 1
         )
-
-    return flat_lines, num_flat_lines, img
+    if num_flat_lines > 0:
+        avg_width /= num_flat_lines
+        avg_width = round(avg_width, 1)
+    else:
+        avg_width = 0
+    return avg_width, img
 
 
 def draw_widths(
-    img,
-    mask,
-    ratio=1,
-    morph1=False,
-    morph2=False,
-    w_min=0,
-    w_max=float("inf"),
-    line_sim_thresh=0,
-    group_y_range=1,
-    draw=False,
+    img: np.ndarray,
+    mask: np.ndarray,
+    ratio: float = 1.0,
+    w_min: float = 0,
+    w_max: float = float("inf"),
+    line_sim_thresh: float = 0.0,
+    group_y_range: float = 1.0,
 ):
     # threshold the mudstone
-    thresh = np.where(mask == 2, 255, 0).astype(np.uint8)
-
-    # optionally, perform some morphology
-    morph = thresh.copy()
-    big_element = cv2.getStructuringElement(cv2.MORPH_RECT, (7, 7))
-    small_element = cv2.getStructuringElement(cv2.MORPH_RECT, (3, 3))
-    if morph1:
-        # remove small rectangles
-        morph = cv2.morphologyEx(morph, cv2.MORPH_OPEN, big_element, iterations=1)
-        # restore connections
-        morph = cv2.morphologyEx(morph, cv2.MORPH_CLOSE, big_element, iterations=1)
-        if morph2:
-            # remove extraneous connections
-            morph = cv2.morphologyEx(morph, cv2.MORPH_OPEN, small_element, iterations=1)
-    # '''contour analysis'''
-    # find the largest contour
+    thresh = np.where(mask == name2id["mudstone"], 255, 0).astype(np.uint8)
+    kernel = np.ones((32, 3), np.uint8)
+    morph = cv2.morphologyEx(thresh, cv2.MORPH_OPEN, kernel, iterations=1)
     cnts = cv2.findContours(morph, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
     # sort the contours from left-to-right
     (cnts, _) = contours.sort_contours(cnts)
-
     # adjust thresholds based on ratio
     w_min *= ratio
     w_max *= ratio
     line_sim_thresh *= ratio
-
+    group_y_range *= ratio
     anno_imgs = []
+
+    img_to_draw_on = img.copy()
     for c in cnts:
-        # copy the original image to prevent editing it
         orig = img.copy()
+        # copy the original image to prevent editing it
         h, w = orig.shape[:2]
         # minimum contour area should be >= 2% of image
         area = cv2.contourArea(c)
@@ -266,8 +273,9 @@ def draw_widths(
         if perc < 2:
             continue
         cv2.drawContours(orig, [c], 0, (255, 0, 0), 1)
+        cv2.drawContours(img_to_draw_on, [c], 0, (255, 0, 0), 1)
         # find the widths
-        flat_lines, num_flat_lines, orig = find_flat_lines(
+        avg_width, orig_lines_drawn = find_flat_lines(
             c,
             orig,
             w_min=w_min,
@@ -276,9 +284,14 @@ def draw_widths(
             ratio=ratio,
             group_y_range=group_y_range,
         )
-        if draw:
-            cv2.imshow("contour", orig)
-            cv2.waitKey(0)
-            print()
-        anno_imgs.append(orig)
-    return anno_imgs
+        avg_width, img_to_draw_on = find_flat_lines(
+            c,
+            img_to_draw_on,
+            w_min=w_min,
+            w_max=w_max,
+            line_sim_thresh=line_sim_thresh,
+            ratio=ratio,
+            group_y_range=group_y_range,
+        )
+        anno_imgs.append(orig_lines_drawn)
+    return anno_imgs, img_to_draw_on
