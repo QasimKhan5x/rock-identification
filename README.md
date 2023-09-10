@@ -7,7 +7,8 @@ Tested on Python 3.8
 
 A specialized desktop application using Tkinter and Python to automate the measurement of sedimentary rock layers, specifically mudstones and sandstones, in overhead imagery. The application leverages a finetuned SegFormer model for semantic segmentation to distinguish between mudstone, sandstone, and background elements in the images.
 
-[application screenshot](assets/demo-img.jpg)
+![application screenshot](assets/demo-img.jpg)
+
 
 **Key Features:**
 
